@@ -9,7 +9,7 @@ ENCRYPTED_FILE = "config.enc"
 KEY_FILE = "key.key"
 
 # Path to your CSV file
-CSV_FILEPATH = r"C:\Users\benip\Downloads\corrected_device_data.csv"
+CSV_FILEPATH = "device_data.csv"
 
 def load_config():
     """
