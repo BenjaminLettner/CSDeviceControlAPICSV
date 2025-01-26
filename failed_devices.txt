@@ -1,64 +1,16 @@
-Device: 1256_26832_44345752514
-Status Code: 405
+Device: 2236_26832_44345752514
+Status Code: 404
 Response: {
  "meta": {
-  "query_time": 1.35e-7,
-  "powered_by": "crowdstrike-api-gateway",
-  "trace_id": "3d556f9f-c576-465d-a6f9-70018bcf975b"
+  "query_time": 0.010710918,
+  "trace_id": "94fb2bd9-4ee1-4643-a609-16b6c4739260"
  },
  "errors": [
   {
-   "code": 405,
-   "message": "405: Method Not Allowed"
+   "code": 404,
+   "message": "Could not find resource with id 3cd8912722fc4fa89157e30e82b3555a"
   }
- ]
-}
-==================================================
-Device: 1256_26832_44345752514
-Status Code: 405
-Response: {
- "meta": {
-  "query_time": 2.07e-7,
-  "powered_by": "crowdstrike-api-gateway",
-  "trace_id": "65f7d0da-2919-4ab9-bcc0-a14f6b82cb26"
- },
- "errors": [
-  {
-   "code": 405,
-   "message": "405: Method Not Allowed"
-  }
- ]
-}
-==================================================
-Device: 0_0_0
-Status Code: 405
-Response: {
- "meta": {
-  "query_time": 1.44e-7,
-  "powered_by": "crowdstrike-api-gateway",
-  "trace_id": "3fcae91e-8b00-4e5e-915d-ddfa68d38349"
- },
- "errors": [
-  {
-   "code": 405,
-   "message": "405: Method Not Allowed"
-  }
- ]
-}
-==================================================
-Device: 0_0_0
-Status Code: 405
-Response: {
- "meta": {
-  "query_time": 1.5e-7,
-  "powered_by": "crowdstrike-api-gateway",
-  "trace_id": "e70d273e-e704-4197-a524-0093bc7e876d"
- },
- "errors": [
-  {
-   "code": 405,
-   "message": "405: Method Not Allowed"
-  }
- ]
+ ],
+ "resources": null
 }
 ==================================================

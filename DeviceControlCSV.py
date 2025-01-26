@@ -5,7 +5,9 @@ import requests
 import logging
 import threading
 import stat
-import webbrowser  # Handles opening URLs in the default web browser
+import time
+import sys
+import subprocess
 from tkinter import Tk, Label, filedialog, messagebox, StringVar, Toplevel, Entry
 from tkinter.ttk import Button, Style, Combobox
 from cryptography.fernet import Fernet
@@ -23,43 +25,35 @@ WHITE = "#FFFFFF"          # White color
 DARK_GRAY = "#555555"      # Dark gray for text
 LIGHT_BG = "#F5F5F5"       # Light background
 
+
 class EncryptionManager:
     """Manages encryption and decryption of configuration files."""
 
     def __init__(self, key_file="key.key", encrypted_file="config.enc", plain_config="config.json"):
-        """Initializes the EncryptionManager with file paths."""
         self.key_file = key_file
-        self.encrypted_file = encrypted_file
+        self.encrypted_file = encrypted_file  # Make sure it's initialized here
         self.plain_config = plain_config
 
     def generate_key(self):
-        """Generates a new encryption key and saves it securely."""
         try:
             key = Fernet.generate_key()
             with open(self.key_file, "wb") as key_file:
                 key_file.write(key)
-            os.chmod(self.key_file, stat.S_IRUSR | stat.S_IWUSR)  # Restrict key file permissions
+            os.chmod(self.key_file, stat.S_IRUSR | stat.S_IWUSR)  # Restrict file permissions
             logging.info(f"Encryption key generated and saved to {self.key_file}.")
         except Exception as e:
             logging.error(f"Error generating key: {e}")
             raise
 
     def save_and_encrypt_config(self, client_id, client_secret, csv_params=None):
-        """
-        Saves the configuration (client credentials and optional CSV parameters)
-        and encrypts it.
-        """
         try:
             config_data = {
                 "client_id": client_id,
                 "client_secret": client_secret
             }
-
-            # Include CSV parameters if provided
             if csv_params:
                 config_data["csv_params"] = csv_params
             else:
-                # If not provided, retain existing csv_params if they exist
                 existing_config = self.load_config(silent=True)
                 if existing_config and "csv_params" in existing_config:
                     config_data["csv_params"] = existing_config["csv_params"]
@@ -80,19 +74,15 @@ class EncryptionManager:
 
             with open(self.encrypted_file, "wb") as enc_file:
                 enc_file.write(encrypted_data)
-            logging.info(f"Configuration encrypted successfully and saved as '{self.encrypted_file}'.")
+            logging.info(f"Configuration encrypted and saved as '{self.encrypted_file}'.")
 
-            os.remove(self.plain_config)  # Remove plain config for security
-            logging.info(f"Plain configuration file '{self.plain_config}' removed for security.")
+            os.remove(self.plain_config)  # Remove plain config
+            logging.info(f"Removed plain config file '{self.plain_config}' for security.")
         except Exception as e:
             logging.error(f"Error saving and encrypting configuration: {e}")
             raise
 
     def load_config(self, silent=False):
-        """
-        Loads and decrypts the configuration.
-        If 'silent' is True, errors are not shown via messagebox.
-        """
         if not os.path.exists(self.encrypted_file):
             if not silent:
                 messagebox.showerror("Error", "Encrypted config file not found.")
@@ -114,12 +104,11 @@ class EncryptionManager:
             return config
         except Exception as e:
             if not silent:
-                messagebox.showerror("Error", f"Failed to load and decrypt configuration: {e}")
-            logging.error(f"Failed to load and decrypt configuration: {e}")
+                messagebox.showerror("Error", f"Failed to load/decrypt configuration: {e}")
+            logging.error(f"Failed to load/decrypt configuration: {e}")
             return None
 
     def encrypt_config_file(self, config_path="config.json"):
-        """Encrypts an existing configuration file."""
         if not os.path.exists(config_path):
             messagebox.showerror("Error", f"'{config_path}' does not exist.")
             logging.error(f"'{config_path}' does not exist.")
@@ -140,13 +129,12 @@ class EncryptionManager:
                 enc_file.write(encrypted_data)
 
             logging.info(f"'{config_path}' encrypted successfully as '{self.encrypted_file}'.")
-            messagebox.showinfo("Success", f"'{config_path}' has been encrypted and saved as '{self.encrypted_file}'.")
+            messagebox.showinfo("Success", f"'{config_path}' has been encrypted as '{self.encrypted_file}'.")
         except Exception as e:
             logging.error(f"Error encrypting config file: {e}")
             messagebox.showerror("Error", f"An error occurred during encryption: {e}")
 
     def decrypt_config(self, output_path="config.json"):
-        """Decrypts the encrypted configuration file."""
         if not os.path.exists(self.encrypted_file):
             messagebox.showerror("Error", "Encrypted config file not found.")
             logging.error("Encrypted config file not found.")
@@ -175,12 +163,10 @@ class APIClient:
     """Handles interactions with the CrowdStrike API."""
 
     def __init__(self, base_url="https://api.eu-1.crowdstrike.com"):
-        """Initializes the APIClient with a base URL."""
         self.base_url = base_url
         self.access_token = None
 
     def get_access_token(self, client_id, client_secret):
-        """Obtains an access token using client credentials."""
         try:
             response = requests.post(
                 f"{self.base_url}/oauth2/token",
@@ -192,63 +178,32 @@ class APIClient:
             logging.info("Access token obtained successfully.")
             return self.access_token
         except requests.HTTPError as http_err:
-            logging.error(f"HTTP error occurred while obtaining access token: {http_err}")
+            logging.error(f"HTTP error obtaining token: {http_err}")
             raise
         except Exception as e:
-            logging.error(f"Unexpected error obtaining access token: {e}")
+            logging.error(f"Unexpected error obtaining token: {e}")
             raise
 
     def get_device_control_policies(self):
-        """Retrieves device control policies from the CrowdStrike API."""
         if not self.access_token:
-            logging.error("Access token is not set.")
+            logging.error("Access token not set for device control policies fetch.")
             raise ValueError("Access token is not set.")
         headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Accept": "application/json"
         }
         try:
-            response = requests.get(
-                f"{self.base_url}/policy/combined/device-control/v1",
-                headers=headers
-            )
+            url = f"{self.base_url}/policy/combined/device-control/v1"
+            response = requests.get(url, headers=headers)
             response.raise_for_status()
             policies = response.json().get("resources", [])
             logging.info(f"Retrieved {len(policies)} device control policies.")
             return policies
         except requests.HTTPError as http_err:
-            logging.error(f"HTTP error occurred while retrieving policies: {http_err}")
+            logging.error(f"HTTP error retrieving policies: {http_err}")
             raise
         except Exception as e:
-            logging.error(f"Unexpected error retrieving policies: {e}")
-            raise
-
-    def update_device_control_policy(self, policy_id, payload):
-        """Updates a specific device control policy with the provided payload."""
-        if not self.access_token:
-            logging.error("Access token is not set.")
-            raise ValueError("Access token is not set.")
-        headers = {
-            "accept": "application/json",
-            "authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
-        try:
-            response = requests.patch(
-                f"{self.base_url}/policy/combined/device-control/v1",
-                json=payload,
-                headers=headers,
-            )
-            if response.status_code in [200, 201, 204]:
-                logging.info(f"Policy {policy_id} updated successfully.")
-            else:
-                logging.warning(f"Failed to update policy {policy_id}. Status Code: {response.status_code}, Response: {response.text}")
-            return response
-        except requests.HTTPError as http_err:
-            logging.error(f"HTTP error during policy update: {http_err}")
-            raise
-        except Exception as e:
-            logging.error(f"Unexpected error during policy update: {e}")
+            logging.error(f"Error retrieving policies: {e}")
             raise
 
 
@@ -256,7 +211,6 @@ class DeviceControlApp:
     """Manages the GUI, user interactions, and coordination between components."""
 
     def __init__(self, root):
-        """Initializes the DeviceControlApp with the main Tkinter window."""
         self.root = root
         self.root.geometry("700x700")
         self.root.configure(bg=LIGHT_BG)
@@ -274,7 +228,7 @@ class DeviceControlApp:
         self.policy_dropdown = None
         self.process_button = None
 
-        # Initialize default CSV import parameters
+        # Default CSV import params
         self.csv_params = {
             "delimiter": ",",
             "encoding": "utf-8",
@@ -283,13 +237,12 @@ class DeviceControlApp:
             "serial_number_column": "Serial Number"
         }
 
-        # Hide the main window initially
+        # Hide the main window initially if no config
         self.root.withdraw()
 
         if not os.path.exists(self.encryption_manager.encrypted_file):
             self.setup_config_dialog()
         else:
-            # Deiconify the main window before showing the main menu
             self.root.deiconify()
             config = self.encryption_manager.load_config()
             if config and "csv_params" in config:
@@ -297,19 +250,7 @@ class DeviceControlApp:
             threading.Thread(target=self.fetch_policies, daemon=True).start()
             self.main_menu()
 
-    def init_styles(self):
-        """Initializes the styles for Tkinter widgets."""
-        style = Style()
-        style.theme_use("clam")
-        # Update button styles to match the red theme
-        style.configure("Rounded.TButton", font=("Segoe UI", 12), padding=10, foreground=WHITE, background=PRIMARY_RED)
-        style.configure("RoundedBlue.TButton", font=("Segoe UI", 12), padding=10,
-                        foreground=WHITE, background=PRIMARY_RED)
-        style.map("RoundedBlue.TButton",
-                  background=[('active', "#B71C1C")])  # Darker red on hover
-
     def setup_config_dialog(self):
-        """Prompts the user to enter Client ID and Client Secret."""
         def submit_credentials():
             client_id = client_id_var.get().strip()
             client_secret = client_secret_var.get().strip()
@@ -317,204 +258,159 @@ class DeviceControlApp:
             if not client_id or not client_secret:
                 messagebox.showerror("Error", "Both Client ID and Client Secret are required.")
                 return
-
-            # Attempt to obtain access token to validate credentials
             try:
-                # Temporarily create a new APIClient instance for validation
-                temp_api_client = APIClient()
-                access_token = temp_api_client.get_access_token(client_id, client_secret)
-                if access_token:
-                    logging.info("API credentials validated successfully.")
-                else:
-                    raise ValueError("Access token not obtained.")
+                # Test authentication quickly
+                test_client = APIClient()
+                token = test_client.get_access_token(client_id, client_secret)
+                if not token:
+                    raise ValueError("No access token returned")
             except Exception as e:
-                messagebox.showerror("Authentication Failed", f"Failed to authenticate with the provided credentials.\nPlease enter valid Client ID and Client Secret.\n\nError: {e}")
-                logging.error(f"Authentication failed: {e}")
-                return  # Do not proceed to save configuration
-
-            # If authentication is successful, proceed to save and encrypt config
+                messagebox.showerror("Error", f"Authentication failed: {e}")
+                return
             try:
                 self.encryption_manager.save_and_encrypt_config(client_id, client_secret, self.csv_params)
-                messagebox.showinfo("Success", "Configuration saved and encrypted successfully.")
-                config_window.destroy()
-                self.root.deiconify()  # Show the main window
+                messagebox.showinfo("Success", "Configuration saved & encrypted.")
+                conf_win.destroy()
+                self.root.deiconify()
                 threading.Thread(target=self.fetch_policies, daemon=True).start()
-                self.main_menu()  # Show main menu after successful config
+                self.main_menu()
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to save configuration: {e}")
+                messagebox.showerror("Error", f"Failed to save config: {e}")
 
-        # Create configuration dialog as a Toplevel window
-        config_window = Toplevel(self.root)
-        config_window.title("Setup Configuration")
-        config_window.geometry("500x500")  # Adjusted height to accommodate all widgets
-        config_window.configure(bg=LIGHT_BG)
-        config_window.grab_set()  # Make this window modal
+        conf_win = Toplevel(self.root)
+        conf_win.title("Setup Configuration")
+        conf_win.geometry("500x500")
+        conf_win.configure(bg=LIGHT_BG)
+        conf_win.grab_set()
 
-        Label(config_window, text="Enter Configuration", font=("Segoe UI", 16, "bold"), bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=10)
+        Label(conf_win, text="Enter Configuration", font=("Segoe UI", 16, "bold"),
+              bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=10)
 
-        info_frame = Label(config_window, bg=LIGHT_BG)
+        info_frame = Label(conf_win, bg=LIGHT_BG)
         info_frame.pack(pady=(0, 10), padx=10, fill='x')
 
         info_text = (
-            "Enter your API Client ID and Secret.\n"
-            "The API needs the following rights:\n"
-            "- Device control policies Read and Write.\n"
-            "Refer to the CrowdStrike Documentation on how to Create API Clients."
+            "Enter API Client ID and Secret.\n"
+            "Needs Read/Write for Device Control Policies.\n"
+            "Check CrowdStrike docs for API client creation steps."
         )
-        Label(info_frame, text=info_text, font=("Segoe UI", 10), bg=LIGHT_BG,
-              wraplength=480, justify="left").pack(pady=(0, 5))
+        Label(info_frame, text=info_text, font=("Segoe UI", 10),
+              bg=LIGHT_BG, wraplength=480, justify="left").pack(pady=(0, 5))
 
-        def open_documentation(event):
+        def doc_link(e):
             webbrowser.open_new("https://falcon.eu-1.crowdstrike.com/documentation/page/te8afcf6/api-integration")
 
-        hyperlink_label = Label(info_frame, text="Crowdstrike API Client Documentation",
-                                font=("Segoe UI", 10, "underline"), fg=PRIMARY_RED, cursor="hand2", bg=LIGHT_BG)
-        hyperlink_label.pack()
-        hyperlink_label.bind("<Button-1>", lambda e: open_documentation(e))
+        doc_lbl = Label(info_frame, text="Crowdstrike API Client Docs",
+                        font=("Segoe UI", 10, "underline"), fg=PRIMARY_RED, cursor="hand2", bg=LIGHT_BG)
+        doc_lbl.pack()
+        doc_lbl.bind("<Button-1>", doc_link)
 
-        Label(config_window, text="Client ID:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(10, 5))
+        Label(conf_win, text="Client ID:", font=("Segoe UI", 12, "bold"),
+              bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(10, 5))
         client_id_var = StringVar()
-        client_id_entry = Entry(config_window, textvariable=client_id_var, width=50, font=("Segoe UI", 12))
-        client_id_entry.pack(pady=5)
+        Entry(conf_win, textvariable=client_id_var, width=50,
+              font=("Segoe UI", 12)).pack(pady=5)
 
-        Label(config_window, text="Client Secret:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(10, 5))
+        Label(conf_win, text="Client Secret:", font=("Segoe UI", 12, "bold"),
+              bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(10, 5))
         client_secret_var = StringVar()
-        client_secret_entry = Entry(config_window, textvariable=client_secret_var, width=50, show="*", font=("Segoe UI", 12))
-        client_secret_entry.pack(pady=5)
+        Entry(conf_win, textvariable=client_secret_var, width=50, show="*",
+              font=("Segoe UI", 12)).pack(pady=5)
 
-        Button(config_window, text="Submit", style="RoundedBlue.TButton", command=submit_credentials).pack(pady=20)
+        Button(conf_win, text="Submit", style="RoundedBlue.TButton",
+               command=submit_credentials).pack(pady=20)
 
-        self.root.wait_window(config_window)
+        self.root.wait_window(conf_win)
+
+    def init_styles(self):
+        style = Style()
+        style.theme_use("clam")
+        style.configure("Rounded.TButton", font=("Segoe UI", 12), padding=10, foreground=WHITE, background=PRIMARY_RED)
+        style.configure("RoundedBlue.TButton", font=("Segoe UI", 12), padding=10,
+                        foreground=WHITE, background=PRIMARY_RED)
+        style.map("RoundedBlue.TButton",
+                  background=[('active', "#B71C1C")])
 
     def fetch_policies(self):
-        """Fetches device control policies from the CrowdStrike API."""
         try:
             self.update_status("Status: Obtaining access token...")
-            config = self.encryption_manager.load_config()
-            if not config:
-                self.update_status("Status: Failed to load config")
+            cfg = self.encryption_manager.load_config()
+            if not cfg:
+                self.update_status("Failed to load config")
                 return
 
-            access_token = self.api_client.get_access_token(config.get("client_id"), config.get("client_secret"))
-            if not access_token:
-                self.update_status("Status: Failed to obtain access token")
+            token = self.api_client.get_access_token(cfg["client_id"], cfg["client_secret"])
+            if not token:
+                self.update_status("Token fetch failed.")
                 return
 
-            self.update_status("Status: Retrieving device control policies...")
+            self.update_status("Fetching device control policies...")
             policies = self.api_client.get_device_control_policies()
             if not policies:
-                self.update_status("Status: No device control policies found.")
+                self.update_status("No device control policies found.")
                 return
 
-            custom_policies = [policy for policy in policies if policy.get("name") != "platform_default"]
-
+            custom_policies = [p for p in policies if p.get("name") != "platform_default"]
             if not custom_policies:
-                self.update_status("Status: No custom device control policies available.")
+                self.update_status("No custom policies available.")
                 return
 
-            policy_names = [f"{policy.get('name', 'Unnamed Policy')} ({policy.get('id')})" for policy in custom_policies]
-            self.policy_id_mapping = {f"{policy.get('name', 'Unnamed Policy')} ({policy.get('id')})": policy for policy in custom_policies}
-
-            # Update the policy dropdown in the main thread
+            policy_names = [f"{p['name']} ({p['id']})" for p in custom_policies]
+            self.policy_id_mapping = {f"{p['name']} ({p['id']})": p for p in custom_policies}
             self.root.after(0, self.update_policy_dropdown, policy_names)
-            self.update_status("Status: Custom policies loaded successfully.")
+            self.update_status("Policies loaded successfully.")
         except Exception as e:
-            logging.error(f"Error fetching policies: {e}")
-            self.update_status("Status: Error fetching policies.")
-            messagebox.showerror("Error", f"An error occurred while fetching policies: {e}")
+            logging.error(f"Policy fetch error: {e}")
+            self.update_status("Error fetching policies.")
+            messagebox.showerror("Error", str(e))
 
     def update_policy_dropdown(self, policy_names):
-        """Updates the policy dropdown with fetched policy names."""
         if self.policy_dropdown:
             self.policy_dropdown['values'] = policy_names
             if policy_names:
-                self.policy_dropdown.current(0)  # Select the first policy by default
+                self.policy_dropdown.current(0)
                 self.on_policy_select()
 
-    def load_config(self):
-        """Loads the encrypted configuration."""
-        try:
-            config = self.encryption_manager.load_config()
-            logging.info("Configuration loaded successfully.")
-            # If CSV parameters are missing, retain default settings
-            if config and "csv_params" in config:
-                self.csv_params = config["csv_params"]
-            return config
-        except FileNotFoundError as e:
-            logging.error(f"Configuration file error: {e}")
-            return None
-        except Exception as e:
-            logging.error(f"Unexpected error loading configuration: {e}")
-            messagebox.showerror("Error", f"Unexpected error loading configuration: {e}")
-        return None
-
-    def generate_key(self):
-        """Generates a new encryption key."""
-        try:
-            self.encryption_manager.generate_key()
-            messagebox.showinfo("Success", "Encryption key generated successfully.")
-        except Exception as e:
-            logging.error(f"Error generating encryption key: {e}")
-            messagebox.showerror("Error", f"An error occurred while generating the encryption key: {e}")
-
-    def encrypt_config_file(self):
-        """Encrypts the plain configuration file."""
-        if not os.path.exists("config.json"):
-            messagebox.showerror("Error", "Could not find 'config.json'. Please ensure it exists in the working directory.")
-            return
-        try:
-            self.encryption_manager.encrypt_config_file()
-        except Exception as e:
-            logging.error(f"Error encrypting config file: {e}")
-            messagebox.showerror("Error", f"An error occurred during encryption: {e}")
-
-    def decrypt_config(self):
-        """Decrypts the encrypted configuration file."""
-        try:
-            self.encryption_manager.decrypt_config()
-        except Exception as e:
-            logging.error(f"Error decrypting config file: {e}")
-            messagebox.showerror("Error", f"An error occurred during decryption: {e}")
-
     def select_csv_file(self):
-        """Opens a dialog to select a CSV file."""
-        self.CSV_FILEPATH = filedialog.askopenfilename(
-            title="Select CSV File",
-            filetypes=[("CSV Files", "*.csv")],
-        )
-        if self.CSV_FILEPATH:
-            messagebox.showinfo("File Selected", f"Selected file: {self.CSV_FILEPATH}")
-            logging.info(f"CSV file selected: {self.CSV_FILEPATH}")
-            self.update_status(f"Status: Selected CSV - {os.path.basename(self.CSV_FILEPATH)}")
-            self.update_summary("Summary: 0 devices processed")
+        path = filedialog.askopenfilename(title="Select CSV File",
+                                          filetypes=[("CSV Files", "*.csv")])
+        if path:
+            self.CSV_FILEPATH = path
+            messagebox.showinfo("File Selected", f"Selected file: {path}")
+            logging.info(f"CSV selected: {path}")
+            self.update_status(f"Selected CSV: {os.path.basename(path)}")
+            self.update_summary("0 devices processed")
 
     def process_csv_and_update_policy(self):
-        """Processes the selected CSV file and updates the chosen device control policy."""
         if not self.CSV_FILEPATH:
             messagebox.showerror("Error", "No CSV file selected.")
-            self.update_status("Status: No CSV selected")
-            self.update_summary("Summary: 0 devices processed")
+            self.update_status("No CSV selected")
+            self.update_summary("0 devices processed")
             return
 
         if not self.selected_policy.get():
             messagebox.showerror("Error", "No policy selected.")
-            self.update_status("Status: No policy selected.")
-            self.update_summary("Summary: 0 devices processed")
+            self.update_status("No policy selected")
+            self.update_summary("0 devices processed")
             return
 
-        selected_policy = self.policy_id_mapping.get(self.selected_policy.get())
-        if not selected_policy:
-            messagebox.showerror("Error", "Selected policy not found.")
-            self.update_status("Status: Selected policy not found.")
-            self.update_summary("Summary: 0 devices processed")
+        pol = self.policy_id_mapping.get(self.selected_policy.get())
+        if not pol:
+            messagebox.showerror("Error", "Policy not found.")
+            self.update_status("Policy not found")
+            self.update_summary("0 devices processed")
             return
 
-        policy_id = selected_policy.get("id")
-
-        threading.Thread(target=self._process_csv_and_update_policy_thread, args=(selected_policy,), daemon=True).start()
+        threading.Thread(
+            target=self._process_csv_and_update_policy_thread,
+            args=(pol,),
+            daemon=True
+        ).start()
 
     def _process_csv_and_update_policy_thread(self, selected_policy):
-        """Threaded function to process the CSV and update the policy."""
+        """
+        Direct requests.patch() call to /policy/entities/device-control/v1.
+        """
         try:
             self.update_status("Status: Processing CSV...")
             self.update_summary("Summary: 0 devices processed")
@@ -524,76 +420,104 @@ class DeviceControlApp:
             total_devices = 0
             failed_devices = []
 
+            # Current classes from selected policy (to append exceptions)
             current_classes = selected_policy.get("settings", {}).get("classes", [])
             class_mapping = {cls.get("id"): cls for cls in current_classes}
 
-            with open(self.CSV_FILEPATH, mode="r", encoding=self.csv_params.get("encoding", "utf-8")) as csv_file:
-                csv_reader = csv.DictReader(csv_file, delimiter=self.csv_params.get("delimiter", ","))
+            # 1) Load config, get token
+            config = self.encryption_manager.load_config(silent=True)
+            if not config:
+                raise ValueError("Config not loaded. Cannot proceed.")
 
-                # Fetch custom column names from csv_params
-                vendor_id_col = self.csv_params.get("vendor_id_column", "Vendor ID")
-                model_product_id_col = self.csv_params.get("model_product_id_column", "Model/Product ID")
-                serial_number_col = self.csv_params.get("serial_number_column", "Serial Number")
+            token = self.api_client.get_access_token(config["client_id"], config["client_secret"])
+            if not token:
+                raise ValueError("Failed to obtain token for patch call.")
 
-                required_columns = {vendor_id_col, model_product_id_col, serial_number_col, "Identifier"}
+            policy_id = selected_policy.get("id")
+
+            with open(self.CSV_FILEPATH, "r", encoding=self.csv_params["encoding"]) as cf:
+                csv_reader = csv.DictReader(cf, delimiter=self.csv_params["delimiter"])
+
+                vend_col = self.csv_params["vendor_id_column"]
+                prod_col = self.csv_params["model_product_id_column"]
+                sn_col = self.csv_params["serial_number_column"]
+
+                required_columns = {vend_col, prod_col, sn_col, "Identifier"}
                 if not required_columns.issubset(csv_reader.fieldnames):
                     missing = required_columns - set(csv_reader.fieldnames)
-                    raise ValueError(f"CSV file is missing required columns: {missing}")
+                    raise ValueError(f"CSV missing cols: {missing}")
 
                 rows = list(csv_reader)
                 total_devices = len(rows)
-                self.update_summary(f"Summary: {total_devices} devices to process")
+                self.update_summary(f"{total_devices} devices to process")
 
-                for index, row in enumerate(rows, start=1):
+                for idx, row in enumerate(rows, start=1):
                     try:
-                        vendor_id_hex = row.get(vendor_id_col, "").strip()
-                        product_id_hex = row.get(model_product_id_col, "").strip()
-                        serial_number_hex = row.get(serial_number_col, "").strip()
+                        vendor_hex = row.get(vend_col, "").strip()
+                        product_hex = row.get(prod_col, "").strip()
+                        serial_hex = row.get(sn_col, "").strip()
                         identifier = row.get("Identifier", "").strip()
 
-                        if not all([vendor_id_hex, product_id_hex, serial_number_hex, identifier]):
-                            raise ValueError("Missing required CSV fields.")
+                        if not all([vendor_hex, product_hex, serial_hex, identifier]):
+                            raise ValueError("Missing fields in CSV row")
 
-                        vendor_id_decimal = self.hex_to_decimal(vendor_id_hex)
-                        product_id_decimal = self.hex_to_decimal(product_id_hex)
-                        serial_number_decimal = self.hex_to_decimal(serial_number_hex)
+                        v_dec = self.hex_to_decimal(vendor_hex)
+                        p_dec = self.hex_to_decimal(product_hex)
+                        s_dec = self.hex_to_decimal(serial_hex)
 
-                        combined_id = f"{vendor_id_decimal}_{product_id_decimal}_{serial_number_decimal}"
+                        combined_id = f"{v_dec}_{p_dec}_{s_dec}"
 
+                        # Build an "exception" item, e.g. BLOCKing or ALLOWing a device
                         exception = {
-                            "vendor_id": vendor_id_hex,
-                            "vendor_id_decimal": vendor_id_decimal,
+                            "vendor_id": vendor_hex,
+                            "vendor_id_decimal": v_dec,
                             "vendor_name": identifier,
-                            "product_id": product_id_hex,
-                            "product_id_decimal": product_id_decimal,
+                            "product_id": product_hex,
+                            "product_id_decimal": p_dec,
                             "product_name": "Unknown Device",
-                            "serial_number": serial_number_decimal,
-                            "action": "BLOCK_EXECUTE",
+                            "serial_number": s_dec,
+                            "action": "BLOCK_EXECUTE",  # Change to ALLOW_EXECUTE if needed
                             "description": f"Blocked device {combined_id}",
                             "expiration_time": "2027-07-21T18:20:16Z",
-                            "combined_id": combined_id,
-                            "match_method": "COMBINED_ID"
+                            "combined_id": combined_id
                         }
 
-                        cls_id = "MASS_STORAGE"
-                        desired_action = "BLOCK_ALL"
+                        # Check if the exception already exists in the policy
+                        # We'll check the 'exceptions' list for any existing exception with the same combined_id
+                        duplicate_found = False
+                        for cls in class_mapping.values():
+                            for existing_exception in cls.get("exceptions", []):
+                                if existing_exception.get("combined_id") == combined_id:
+                                    duplicate_found = True
+                                    break
+                            if duplicate_found:
+                                break
 
-                        if cls_id in class_mapping:
-                            class_mapping[cls_id]["action"] = desired_action
-                            class_mapping[cls_id]["exceptions"].append(exception)
+                        if not duplicate_found:
+                            # Example: we manipulate the MASS_STORAGE class -> BLOCK_ALL
+                            # Replace with ALLOW_ALL if you want to allow the device.
+                            cls_id = "MASS_STORAGE"
+                            desired_action = "BLOCK_ALL"
+
+                            if cls_id in class_mapping:
+                                class_mapping[cls_id]["action"] = desired_action
+                                class_mapping[cls_id]["exceptions"].append(exception)
+                            else:
+                                new_class = {
+                                    "id": cls_id,
+                                    "action": desired_action,
+                                    "exceptions": [exception]
+                                }
+                                class_mapping[cls_id] = new_class
+                                current_classes.append(new_class)
                         else:
-                            new_class = {
-                                "id": cls_id,
-                                "action": desired_action,
-                                "exceptions": [exception]
-                            }
-                            class_mapping[cls_id] = new_class
-                            current_classes.append(new_class)
+                            logging.info(f"Duplicate exception found for combined_id: {combined_id}. Skipping.")
 
-                        payload = {
+                        # Prepare the final payload for PATCH /policy/entities/device-control/v1
+                        patch_payload = {
                             "resources": [
                                 {
-                                    "id": selected_policy.get("id"),
+                                    "id": policy_id,
                                     "settings": {
                                         "classes": list(class_mapping.values())
                                     }
@@ -601,40 +525,59 @@ class DeviceControlApp:
                             ]
                         }
 
-                        response = self.api_client.update_device_control_policy(selected_policy.get("id"), payload)
+                        # Make direct requests.patch call to /policy/entities/device-control/v1
+                        url = "https://api.eu-1.crowdstrike.com/policy/entities/device-control/v1"
+                        headers = {
+                            "accept": "application/json",
+                            "authorization": f"Bearer {token}",
+                            "Content-Type": "application/json"
+                        }
 
-                        if response.status_code in [200, 201, 204]:
+                        resp = requests.patch(url, headers=headers, json=patch_payload)
+
+                        if resp.status_code in [200, 201, 204]:
                             success_count += 1
                         else:
                             failure_count += 1
                             failed_devices.append({
                                 "device": combined_id,
-                                "status_code": response.status_code,
-                                "response": response.text
+                                "status_code": resp.status_code,
+                                "response": resp.text
                             })
 
-                    except Exception as e:
+                    except Exception as exc:
                         failure_count += 1
                         failed_devices.append({
                             "device": row,
                             "status_code": "N/A",
-                            "response": str(e)
+                            "response": str(exc)
                         })
                     finally:
-                        self.update_summary(f"Summary: {index} of {total_devices} devices processed")
+                        self.update_summary(f"{idx} of {total_devices} devices processed")
 
             if failed_devices:
-                with open("failed_devices.txt", "w", encoding="utf-8") as failed_file:
+                with open("failed_devices.txt", "w", encoding="utf-8") as ff:
                     for failed in failed_devices:
-                        failed_file.write(f"Device: {failed['device']}\n")
-                        failed_file.write(f"Status Code: {failed['status_code']}\n")
-                        failed_file.write(f"Response: {failed['response']}\n")
-                        failed_file.write("=" * 50 + "\n")
+                        ff.write(f"Device: {failed['device']}\n")
+                        ff.write(f"Status Code: {failed['status_code']}\n")
+                        ff.write(f"Response: {failed['response']}\n")
+                        ff.write("=" * 50 + "\n")
                 logging.warning(f"{len(failed_devices)} devices failed to update.")
 
             self.update_status(f"Status: {success_count} succeeded, {failure_count} failed")
             self.update_summary(f"Summary: {total_devices} devices processed")
-            messagebox.showinfo("Success", f"CSV processed and policy updated.\nFailed devices saved to 'failed_devices.txt'")
+            messagebox.showinfo(
+                "Success",
+                f"CSV processed and policy updated.\nFailed devices saved to 'failed_devices.txt'"
+            )
+
+            # Quit the app and relaunch it using subprocess
+            self.root.quit()
+
+            # Relaunch the application
+            time.sleep(1)  # Adding a short delay to avoid immediate restart
+            subprocess.Popen([sys.executable] + sys.argv)
+
         except Exception as e:
             logging.error(f"Error during CSV processing: {e}")
             self.update_status("Status: Error during processing")
@@ -642,7 +585,6 @@ class DeviceControlApp:
             messagebox.showerror("Error", f"An error occurred: {e}")
 
     def hex_to_decimal(self, hex_value):
-        """Converts a hexadecimal string to its decimal representation."""
         try:
             return str(int(hex_value, 16))
         except ValueError:
@@ -650,17 +592,14 @@ class DeviceControlApp:
             return "0"
 
     def update_status(self, status):
-        """Updates the status label with the provided status message."""
         if self.status_label:
             self.status_label.config(text=status)
 
     def update_summary(self, count):
-        """Updates the summary label with the provided count."""
         if self.summary_label:
             self.summary_label.config(text=count)
 
     def on_policy_select(self, event=None):
-        """Enables the process button when a policy is selected."""
         selected = self.selected_policy.get()
         if selected:
             self.process_button.config(state="normal")
@@ -671,158 +610,85 @@ class DeviceControlApp:
             self.update_status("Status: No policy selected")
             self.update_summary("Summary: 0 devices processed")
 
-    def open_config_menu(self):
-        """Opens the configuration management menu."""
-        self.clear_window()
-        self.root.title("Configuration Menu")
+    def select_csv_file(self):
+        path = filedialog.askopenfilename(title="Select CSV File",
+                                          filetypes=[("CSV Files", "*.csv")])
+        if path:
+            self.CSV_FILEPATH = path
+            messagebox.showinfo("File Selected", f"Selected file: {path}")
+            logging.info(f"CSV selected: {path}")
+            self.update_status(f"Selected CSV: {os.path.basename(path)}")
+            self.update_summary("0 devices processed")
 
-        Label(self.root, text="Configuration Options", font=("Segoe UI", 18, "bold"), bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=20)
+    def process_csv_and_update_policy(self):
+        if not self.CSV_FILEPATH:
+            messagebox.showerror("Error", "No CSV file selected.")
+            self.update_status("No CSV selected")
+            self.update_summary("0 devices processed")
+            return
 
-        Button(self.root, text="Generate Encryption Key", style="Rounded.TButton", command=self.generate_key).pack(pady=10)
-        Button(self.root, text="Encrypt Config File", style="Rounded.TButton", command=self.encrypt_config_file).pack(pady=10)
-        Button(self.root, text="Decrypt Config File", style="Rounded.TButton", command=self.decrypt_config).pack(pady=10)
-        Button(self.root, text="CSV Import Settings", style="Rounded.TButton", command=self.open_csv_settings_dialog).pack(pady=10)
+        if not self.selected_policy.get():
+            messagebox.showerror("Error", "No policy selected.")
+            self.update_status("No policy selected")
+            self.update_summary("0 devices processed")
+            return
 
-        Button(self.root, text="Back to Main Menu", style="RoundedBlue.TButton", command=self.main_menu).pack(pady=20)
+        pol = self.policy_id_mapping.get(self.selected_policy.get())
+        if not pol:
+            messagebox.showerror("Error", "Policy not found.")
+            self.update_status("Policy not found")
+            self.update_summary("0 devices processed")
+            return
 
-    def open_csv_settings_dialog(self):
-        """Opens a dialog to set CSV import parameters."""
-        def save_settings():
-            delimiter = delimiter_var.get()
-            encoding = encoding_var.get().strip()
-            vendor_id_col = vendor_id_var.get().strip()
-            model_product_id_col = model_product_id_var.get().strip()
-            serial_number_col = serial_number_var.get().strip()
-
-            # Validate inputs
-            if not delimiter:
-                messagebox.showerror("Error", "Delimiter cannot be empty.")
-                return
-            if not encoding:
-                messagebox.showerror("Error", "Encoding cannot be empty.")
-                return
-            if not vendor_id_col:
-                messagebox.showerror("Error", "Vendor ID Column Name cannot be empty.")
-                return
-            if not model_product_id_col:
-                messagebox.showerror("Error", "Model/Product ID Column Name cannot be empty.")
-                return
-            if not serial_number_col:
-                messagebox.showerror("Error", "Serial Number Column Name cannot be empty.")
-                return
-
-            # Update CSV parameters
-            self.csv_params["delimiter"] = delimiter
-            self.csv_params["encoding"] = encoding
-            self.csv_params["vendor_id_column"] = vendor_id_col
-            self.csv_params["model_product_id_column"] = model_product_id_col
-            self.csv_params["serial_number_column"] = serial_number_col
-
-            # Load existing config to update
-            config = self.encryption_manager.load_config()
-            if config:
-                config["csv_params"] = self.csv_params
-                try:
-                    self.encryption_manager.save_and_encrypt_config(
-                        config.get("client_id"),
-                        config.get("client_secret"),
-                        csv_params=self.csv_params
-                    )
-                except Exception as e:
-                    messagebox.showerror("Error", f"Failed to update configuration: {e}")
-                    return
-            else:
-                # If config does not exist, it should have been handled earlier
-                messagebox.showerror("Error", "Configuration not loaded. Please reconfigure.")
-                return
-
-            messagebox.showinfo("Success", "CSV import settings updated successfully.")
-            csv_settings_window.destroy()
-
-        # Create CSV settings dialog as a Toplevel window
-        csv_settings_window = Toplevel(self.root)
-        csv_settings_window.title("CSV Import Settings")
-        csv_settings_window.geometry("400x600")  # Increased height to ensure all widgets are visible
-        csv_settings_window.configure(bg=LIGHT_BG)
-        csv_settings_window.grab_set()  # Make this window modal
-
-        Label(csv_settings_window, text="CSV Import Settings", font=("Segoe UI", 14, "bold"), bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=10)
-
-        # Delimiter Setting
-        Label(csv_settings_window, text="Delimiter:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
-        delimiter_var = StringVar(value=self.csv_params["delimiter"])
-        delimiter_entry = Entry(csv_settings_window, textvariable=delimiter_var, width=10, font=("Segoe UI", 12))
-        delimiter_entry.pack(pady=5)
-
-        # Encoding Setting
-        Label(csv_settings_window, text="Encoding:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
-        encoding_var = StringVar(value=self.csv_params["encoding"])
-        encoding_entry = Entry(csv_settings_window, textvariable=encoding_var, width=30, font=("Segoe UI", 12))
-        encoding_entry.pack(pady=5)
-
-        # Vendor ID Column Name
-        Label(csv_settings_window, text="Vendor ID Column Name:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
-        vendor_id_var = StringVar(value=self.csv_params["vendor_id_column"])
-        vendor_id_entry = Entry(csv_settings_window, textvariable=vendor_id_var, width=30, font=("Segoe UI", 12))
-        vendor_id_entry.pack(pady=5)
-
-        # Model/Product ID Column Name
-        Label(csv_settings_window, text="Model/Product ID Column Name:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
-        model_product_id_var = StringVar(value=self.csv_params["model_product_id_column"])
-        model_product_id_entry = Entry(csv_settings_window, textvariable=model_product_id_var, width=30, font=("Segoe UI", 12))
-        model_product_id_entry.pack(pady=5)
-
-        # Serial Number Column Name
-        Label(csv_settings_window, text="Serial Number Column Name:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
-        serial_number_var = StringVar(value=self.csv_params["serial_number_column"])
-        serial_number_entry = Entry(csv_settings_window, textvariable=serial_number_var, width=30, font=("Segoe UI", 12))
-        serial_number_entry.pack(pady=5)
-
-        # Save Button (Adjusted to be larger)
-        save_button = Button(
-            csv_settings_window,
-            text="Save Settings",
-            style="RoundedBlue.TButton",
-            command=save_settings,
-            width=20  # Increased width for better visibility
-        )
-        save_button.pack(pady=30)
-
-    def clear_window(self):
-        """Clears all widgets from the main window."""
-        for widget in self.root.winfo_children():
-            widget.destroy()
+        threading.Thread(
+            target=self._process_csv_and_update_policy_thread,
+            args=(pol,),
+            daemon=True
+        ).start()
 
     def main_menu(self):
-        """Displays the main menu of the application."""
         self.clear_window()
         self.root.title("Cancom Device Control Tool")
 
-        Label(self.root, text="Cancom Device Control Tool", font=("Segoe UI", 20, "bold"), bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=20)
-        Button(self.root, text="Configuration Menu", style="Rounded.TButton", command=self.open_config_menu).pack(pady=10)
-        Button(self.root, text="Select CSV File", style="Rounded.TButton", command=self.select_csv_file).pack(pady=10)
-        # Removed the CSV Import Settings button from the main menu as per previous request
+        Label(self.root, text="Cancom Device Control Tool", font=("Segoe UI", 20, "bold"),
+              bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=20)
 
-        Label(self.root, text="Select Device Control Policy:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=10)
-        self.policy_dropdown = Combobox(self.root, textvariable=self.selected_policy, state="readonly", width=50, font=("Segoe UI", 12))
+        Button(self.root, text="Select CSV File", style="Rounded.TButton",
+               command=self.select_csv_file).pack(pady=10)
+
+        Label(self.root, text="Select Device Control Policy:", font=("Segoe UI", 12, "bold"),
+              bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=10)
+        self.policy_dropdown = Combobox(self.root, textvariable=self.selected_policy,
+                                        state="readonly", width=50, font=("Segoe UI", 12))
         self.policy_dropdown.pack(pady=5)
         self.policy_dropdown.bind("<<ComboboxSelected>>", self.on_policy_select)
 
-        self.process_button = Button(self.root, text="Process CSV and Update Policy", style="RoundedBlue.TButton", command=self.process_csv_and_update_policy)
+        self.process_button = Button(
+            self.root,
+            text="Process CSV and Update Policy",
+            style="RoundedBlue.TButton",
+            command=self.process_csv_and_update_policy
+        )
         self.process_button.pack(pady=20)
-        self.process_button.config(state="disabled")  # Disabled until a policy is selected
+        self.process_button.config(state="disabled")
 
-        self.status_label = Label(self.root, text="Status: Waiting for action", font=("Segoe UI", 12), bg=LIGHT_BG, fg=PRIMARY_RED)
+        self.status_label = Label(self.root, text="Status: Waiting for action",
+                                  font=("Segoe UI", 12), bg=LIGHT_BG, fg=PRIMARY_RED)
         self.status_label.pack(pady=5)
-        self.summary_label = Label(self.root, text="Summary: 0 devices processed", font=("Segoe UI", 12), bg=LIGHT_BG, fg=DARK_GRAY)
+        self.summary_label = Label(self.root, text="Summary: 0 devices processed",
+                                   font=("Segoe UI", 12), bg=LIGHT_BG, fg=DARK_GRAY)
         self.summary_label.pack(pady=5)
 
-        trademark_label = Label(self.root, text="© Benjamin Lettner", font=("Segoe UI", 10), bg=LIGHT_BG, fg=DARK_GRAY)
+        trademark_label = Label(self.root, text="© Benjamin Lettner",
+                                font=("Segoe UI", 10), bg=LIGHT_BG, fg=DARK_GRAY)
         trademark_label.pack(side="bottom", anchor="se", padx=10, pady=10)
+
+    def clear_window(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
 
 def main():
-    """Initializes and runs the DeviceControlApp."""
     root = Tk()
     app = DeviceControlApp(root)
     root.mainloop()
