@@ -17,6 +17,11 @@ logging.basicConfig(
     format='%(asctime)s:%(levelname)s:%(message)s'
 )
 
+# Define color constants for the red theme
+PRIMARY_RED = "#D32F2F"    # Primary red color
+WHITE = "#FFFFFF"          # White color
+DARK_GRAY = "#555555"      # Dark gray for text
+LIGHT_BG = "#F5F5F5"       # Light background
 
 class EncryptionManager:
     """Manages encryption and decryption of configuration files."""
@@ -254,7 +259,7 @@ class DeviceControlApp:
         """Initializes the DeviceControlApp with the main Tkinter window."""
         self.root = root
         self.root.geometry("700x700")
-        self.root.configure(bg="#F5F5F5")
+        self.root.configure(bg=LIGHT_BG)
 
         self.init_styles()
         self.encryption_manager = EncryptionManager()
@@ -296,14 +301,12 @@ class DeviceControlApp:
         """Initializes the styles for Tkinter widgets."""
         style = Style()
         style.theme_use("clam")
-        style.configure("Rounded.TButton", font=("Segoe UI", 12), padding=10)
+        # Update button styles to match the red theme
+        style.configure("Rounded.TButton", font=("Segoe UI", 12), padding=10, foreground=WHITE, background=PRIMARY_RED)
         style.configure("RoundedBlue.TButton", font=("Segoe UI", 12), padding=10,
-                        foreground="#FFFFFF", background="#0078D7")
+                        foreground=WHITE, background=PRIMARY_RED)
         style.map("RoundedBlue.TButton",
-                  background=[('active', '#005A9E')])
-        # Removed Progressbar style since the progress bar is no longer needed
-        # style.configure("Progressbar.Horizontal.TProgressbar",
-        #                 troughcolor='#F5F5F5', background='#0078D7')
+                  background=[('active', "#B71C1C")])  # Darker red on hover
 
     def setup_config_dialog(self):
         """Prompts the user to enter Client ID and Client Secret."""
@@ -344,11 +347,12 @@ class DeviceControlApp:
         config_window = Toplevel(self.root)
         config_window.title("Setup Configuration")
         config_window.geometry("500x500")  # Adjusted height to accommodate all widgets
+        config_window.configure(bg=LIGHT_BG)
         config_window.grab_set()  # Make this window modal
 
-        Label(config_window, text="Enter Configuration", font=("Segoe UI", 16, "bold"), bg="#F5F5F5").pack(pady=10)
+        Label(config_window, text="Enter Configuration", font=("Segoe UI", 16, "bold"), bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=10)
 
-        info_frame = Label(config_window, bg="#F5F5F5")
+        info_frame = Label(config_window, bg=LIGHT_BG)
         info_frame.pack(pady=(0, 10), padx=10, fill='x')
 
         info_text = (
@@ -357,25 +361,25 @@ class DeviceControlApp:
             "- Device control policies Read and Write.\n"
             "Refer to the CrowdStrike Documentation on how to Create API Clients."
         )
-        Label(info_frame, text=info_text, font=("Segoe UI", 10), bg="#F5F5F5",
+        Label(info_frame, text=info_text, font=("Segoe UI", 10), bg=LIGHT_BG,
               wraplength=480, justify="left").pack(pady=(0, 5))
 
         def open_documentation(event):
             webbrowser.open_new("https://falcon.eu-1.crowdstrike.com/documentation/page/te8afcf6/api-integration")
 
         hyperlink_label = Label(info_frame, text="Crowdstrike API Client Documentation",
-                                font=("Segoe UI", 10, "underline"), fg="blue", cursor="hand2", bg="#F5F5F5")
+                                font=("Segoe UI", 10, "underline"), fg=PRIMARY_RED, cursor="hand2", bg=LIGHT_BG)
         hyperlink_label.pack()
         hyperlink_label.bind("<Button-1>", lambda e: open_documentation(e))
 
-        Label(config_window, text="Client ID:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=(10, 5))
+        Label(config_window, text="Client ID:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(10, 5))
         client_id_var = StringVar()
-        client_id_entry = Entry(config_window, textvariable=client_id_var, width=50)
+        client_id_entry = Entry(config_window, textvariable=client_id_var, width=50, font=("Segoe UI", 12))
         client_id_entry.pack(pady=5)
 
-        Label(config_window, text="Client Secret:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=(10, 5))
+        Label(config_window, text="Client Secret:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(10, 5))
         client_secret_var = StringVar()
-        client_secret_entry = Entry(config_window, textvariable=client_secret_var, width=50, show="*")
+        client_secret_entry = Entry(config_window, textvariable=client_secret_var, width=50, show="*", font=("Segoe UI", 12))
         client_secret_entry.pack(pady=5)
 
         Button(config_window, text="Submit", style="RoundedBlue.TButton", command=submit_credentials).pack(pady=20)
@@ -672,7 +676,7 @@ class DeviceControlApp:
         self.clear_window()
         self.root.title("Configuration Menu")
 
-        Label(self.root, text="Configuration Options", font=("Segoe UI", 18, "bold"), bg="#F5F5F5").pack(pady=20)
+        Label(self.root, text="Configuration Options", font=("Segoe UI", 18, "bold"), bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=20)
 
         Button(self.root, text="Generate Encryption Key", style="Rounded.TButton", command=self.generate_key).pack(pady=10)
         Button(self.root, text="Encrypt Config File", style="Rounded.TButton", command=self.encrypt_config_file).pack(pady=10)
@@ -739,38 +743,39 @@ class DeviceControlApp:
         csv_settings_window = Toplevel(self.root)
         csv_settings_window.title("CSV Import Settings")
         csv_settings_window.geometry("400x600")  # Increased height to ensure all widgets are visible
+        csv_settings_window.configure(bg=LIGHT_BG)
         csv_settings_window.grab_set()  # Make this window modal
 
-        Label(csv_settings_window, text="CSV Import Settings", font=("Segoe UI", 14, "bold"), bg="#F5F5F5").pack(pady=10)
+        Label(csv_settings_window, text="CSV Import Settings", font=("Segoe UI", 14, "bold"), bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=10)
 
         # Delimiter Setting
-        Label(csv_settings_window, text="Delimiter:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=(20, 5))
+        Label(csv_settings_window, text="Delimiter:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
         delimiter_var = StringVar(value=self.csv_params["delimiter"])
-        delimiter_entry = Entry(csv_settings_window, textvariable=delimiter_var, width=10)
+        delimiter_entry = Entry(csv_settings_window, textvariable=delimiter_var, width=10, font=("Segoe UI", 12))
         delimiter_entry.pack(pady=5)
 
         # Encoding Setting
-        Label(csv_settings_window, text="Encoding:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=(20, 5))
+        Label(csv_settings_window, text="Encoding:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
         encoding_var = StringVar(value=self.csv_params["encoding"])
-        encoding_entry = Entry(csv_settings_window, textvariable=encoding_var, width=30)
+        encoding_entry = Entry(csv_settings_window, textvariable=encoding_var, width=30, font=("Segoe UI", 12))
         encoding_entry.pack(pady=5)
 
         # Vendor ID Column Name
-        Label(csv_settings_window, text="Vendor ID Column Name:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=(20, 5))
+        Label(csv_settings_window, text="Vendor ID Column Name:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
         vendor_id_var = StringVar(value=self.csv_params["vendor_id_column"])
-        vendor_id_entry = Entry(csv_settings_window, textvariable=vendor_id_var, width=30)
+        vendor_id_entry = Entry(csv_settings_window, textvariable=vendor_id_var, width=30, font=("Segoe UI", 12))
         vendor_id_entry.pack(pady=5)
 
         # Model/Product ID Column Name
-        Label(csv_settings_window, text="Model/Product ID Column Name:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=(20, 5))
+        Label(csv_settings_window, text="Model/Product ID Column Name:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
         model_product_id_var = StringVar(value=self.csv_params["model_product_id_column"])
-        model_product_id_entry = Entry(csv_settings_window, textvariable=model_product_id_var, width=30)
+        model_product_id_entry = Entry(csv_settings_window, textvariable=model_product_id_var, width=30, font=("Segoe UI", 12))
         model_product_id_entry.pack(pady=5)
 
         # Serial Number Column Name
-        Label(csv_settings_window, text="Serial Number Column Name:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=(20, 5))
+        Label(csv_settings_window, text="Serial Number Column Name:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=(20, 5))
         serial_number_var = StringVar(value=self.csv_params["serial_number_column"])
-        serial_number_entry = Entry(csv_settings_window, textvariable=serial_number_var, width=30)
+        serial_number_entry = Entry(csv_settings_window, textvariable=serial_number_var, width=30, font=("Segoe UI", 12))
         serial_number_entry.pack(pady=5)
 
         # Save Button (Adjusted to be larger)
@@ -791,16 +796,15 @@ class DeviceControlApp:
     def main_menu(self):
         """Displays the main menu of the application."""
         self.clear_window()
-        self.root.title("CrowdStrike Device Control Tool")
+        self.root.title("Cancom Device Control Tool")
 
-        Label(self.root, text="CrowdStrike Device Control Tool", font=("Segoe UI", 20, "bold"), bg="#F5F5F5").pack(pady=20)
+        Label(self.root, text="Cancom Device Control Tool", font=("Segoe UI", 20, "bold"), bg=LIGHT_BG, fg=PRIMARY_RED).pack(pady=20)
         Button(self.root, text="Configuration Menu", style="Rounded.TButton", command=self.open_config_menu).pack(pady=10)
         Button(self.root, text="Select CSV File", style="Rounded.TButton", command=self.select_csv_file).pack(pady=10)
-        # Removed the CSV Import Settings button from the main menu
-        # Button(self.root, text="CSV Import Settings", style="Rounded.TButton", command=self.open_csv_settings_dialog).pack(pady=10)
+        # Removed the CSV Import Settings button from the main menu as per previous request
 
-        Label(self.root, text="Select Device Control Policy:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=10)
-        self.policy_dropdown = Combobox(self.root, textvariable=self.selected_policy, state="readonly", width=50)
+        Label(self.root, text="Select Device Control Policy:", font=("Segoe UI", 12, "bold"), bg=LIGHT_BG, fg=DARK_GRAY).pack(pady=10)
+        self.policy_dropdown = Combobox(self.root, textvariable=self.selected_policy, state="readonly", width=50, font=("Segoe UI", 12))
         self.policy_dropdown.pack(pady=5)
         self.policy_dropdown.bind("<<ComboboxSelected>>", self.on_policy_select)
 
@@ -808,16 +812,12 @@ class DeviceControlApp:
         self.process_button.pack(pady=20)
         self.process_button.config(state="disabled")  # Disabled until a policy is selected
 
-        self.status_label = Label(self.root, text="Status: Waiting for action", font=("Segoe UI", 12), bg="#F5F5F5", fg="#0078D7")
+        self.status_label = Label(self.root, text="Status: Waiting for action", font=("Segoe UI", 12), bg=LIGHT_BG, fg=PRIMARY_RED)
         self.status_label.pack(pady=5)
-        self.summary_label = Label(self.root, text="Summary: 0 devices processed", font=("Segoe UI", 12), bg="#F5F5F5", fg="#555555")
+        self.summary_label = Label(self.root, text="Summary: 0 devices processed", font=("Segoe UI", 12), bg=LIGHT_BG, fg=DARK_GRAY)
         self.summary_label.pack(pady=5)
 
-        # Removed the progress bar as per user request
-        # self.progress = Progressbar(self.root, style="Progressbar.Horizontal.TProgressbar", mode='determinate')
-        # self.progress.pack(pady=10, fill='x', padx=50)
-
-        trademark_label = Label(self.root, text="© Benjamin Lettner", font=("Segoe UI", 10), bg="#F5F5F5", fg="#888888")
+        trademark_label = Label(self.root, text="© Benjamin Lettner", font=("Segoe UI", 10), bg=LIGHT_BG, fg=DARK_GRAY)
         trademark_label.pack(side="bottom", anchor="se", padx=10, pady=10)
 
 
