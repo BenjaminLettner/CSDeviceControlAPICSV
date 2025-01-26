@@ -315,6 +315,21 @@ class DeviceControlApp:
                 messagebox.showerror("Error", "Both Client ID and Client Secret are required.")
                 return
 
+            # Attempt to obtain access token to validate credentials
+            try:
+                # Temporarily create a new APIClient instance for validation
+                temp_api_client = APIClient()
+                access_token = temp_api_client.get_access_token(client_id, client_secret)
+                if access_token:
+                    logging.info("API credentials validated successfully.")
+                else:
+                    raise ValueError("Access token not obtained.")
+            except Exception as e:
+                messagebox.showerror("Authentication Failed", f"Failed to authenticate with the provided credentials.\nPlease enter valid Client ID and Client Secret.\n\nError: {e}")
+                logging.error(f"Authentication failed: {e}")
+                return  # Do not proceed to save configuration
+
+            # If authentication is successful, proceed to save and encrypt config
             try:
                 self.encryption_manager.save_and_encrypt_config(client_id, client_secret, self.csv_params)
                 messagebox.showinfo("Success", "Configuration saved and encrypted successfully.")
@@ -328,7 +343,7 @@ class DeviceControlApp:
         # Create configuration dialog as a Toplevel window
         config_window = Toplevel(self.root)
         config_window.title("Setup Configuration")
-        config_window.geometry("500x450")  # Increased height to accommodate all widgets
+        config_window.geometry("500x500")  # Adjusted height to accommodate all widgets
         config_window.grab_set()  # Make this window modal
 
         Label(config_window, text="Enter Configuration", font=("Segoe UI", 16, "bold"), bg="#F5F5F5").pack(pady=10)
