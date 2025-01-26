@@ -781,7 +781,8 @@ class DeviceControlApp:
         Label(self.root, text="CrowdStrike Device Control Tool", font=("Segoe UI", 20, "bold"), bg="#F5F5F5").pack(pady=20)
         Button(self.root, text="Configuration Menu", style="Rounded.TButton", command=self.open_config_menu).pack(pady=10)
         Button(self.root, text="Select CSV File", style="Rounded.TButton", command=self.select_csv_file).pack(pady=10)
-        Button(self.root, text="CSV Import Settings", style="Rounded.TButton", command=self.open_csv_settings_dialog).pack(pady=10)
+        # Removed the CSV Import Settings button from the main menu
+        # Button(self.root, text="CSV Import Settings", style="Rounded.TButton", command=self.open_csv_settings_dialog).pack(pady=10)
 
         Label(self.root, text="Select Device Control Policy:", font=("Segoe UI", 12), bg="#F5F5F5").pack(pady=10)
         self.policy_dropdown = Combobox(self.root, textvariable=self.selected_policy, state="readonly", width=50)
