@@ -1,0 +1,11 @@
+# Ignore all files except those explicitly specified
+*
+
+# Whitelist specific files and folders
+!.gitignore
+!*/
+
+# Ignore configuration files
+config.json
+config.enc
+key.key
