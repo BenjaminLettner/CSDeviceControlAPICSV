@@ -12,18 +12,18 @@ from tkinter import Tk, Label, filedialog, messagebox, StringVar, Toplevel, Entr
 from tkinter.ttk import Button, Style, Combobox
 from cryptography.fernet import Fernet
 
-# Configure logging to capture essential information
+
 logging.basicConfig(
     filename='app.log',
     level=logging.INFO,
     format='%(asctime)s:%(levelname)s:%(message)s'
 )
 
-# Define color constants for the red theme
-PRIMARY_RED = "#D32F2F"    # Primary red color
-WHITE = "#FFFFFF"          # White color
-DARK_GRAY = "#555555"      # Dark gray for text
-LIGHT_BG = "#F5F5F5"       # Light background
+
+PRIMARY_RED = "#D32F2F"
+WHITE = "#FFFFFF"
+DARK_GRAY = "#555555"
+LIGHT_BG = "#F5F5F5"
 
 
 class EncryptionManager:
@@ -31,7 +31,7 @@ class EncryptionManager:
 
     def __init__(self, key_file="key.key", encrypted_file="config.enc", plain_config="config.json"):
         self.key_file = key_file
-        self.encrypted_file = encrypted_file  # Make sure it's initialized here
+        self.encrypted_file = encrypted_file
         self.plain_config = plain_config
 
     def generate_key(self):
@@ -39,7 +39,7 @@ class EncryptionManager:
             key = Fernet.generate_key()
             with open(self.key_file, "wb") as key_file:
                 key_file.write(key)
-            os.chmod(self.key_file, stat.S_IRUSR | stat.S_IWUSR)  # Restrict file permissions
+            os.chmod(self.key_file, stat.S_IRUSR | stat.S_IWUSR)
             logging.info(f"Encryption key generated and saved to {self.key_file}.")
         except Exception as e:
             logging.error(f"Error generating key: {e}")
@@ -76,7 +76,7 @@ class EncryptionManager:
                 enc_file.write(encrypted_data)
             logging.info(f"Configuration encrypted and saved as '{self.encrypted_file}'.")
 
-            os.remove(self.plain_config)  # Remove plain config
+            os.remove(self.plain_config)
             logging.info(f"Removed plain config file '{self.plain_config}' for security.")
         except Exception as e:
             logging.error(f"Error saving and encrypting configuration: {e}")
@@ -228,7 +228,6 @@ class DeviceControlApp:
         self.policy_dropdown = None
         self.process_button = None
 
-        # Default CSV import params
         self.csv_params = {
             "delimiter": ",",
             "encoding": "utf-8",
@@ -237,7 +236,6 @@ class DeviceControlApp:
             "serial_number_column": "Serial Number"
         }
 
-        # Hide the main window initially if no config
         self.root.withdraw()
 
         if not os.path.exists(self.encryption_manager.encrypted_file):
@@ -259,7 +257,6 @@ class DeviceControlApp:
                 messagebox.showerror("Error", "Both Client ID and Client Secret are required.")
                 return
             try:
-                # Test authentication quickly
                 test_client = APIClient()
                 token = test_client.get_access_token(client_id, client_secret)
                 if not token:
@@ -420,11 +417,11 @@ class DeviceControlApp:
             total_devices = 0
             failed_devices = []
 
-            # Current classes from selected policy (to append exceptions)
+
             current_classes = selected_policy.get("settings", {}).get("classes", [])
             class_mapping = {cls.get("id"): cls for cls in current_classes}
 
-            # 1) Load config, get token
+
             config = self.encryption_manager.load_config(silent=True)
             if not config:
                 raise ValueError("Config not loaded. Cannot proceed.")
@@ -467,7 +464,7 @@ class DeviceControlApp:
 
                         combined_id = f"{v_dec}_{p_dec}_{s_dec}"
 
-                        # Build an "exception" item, e.g. BLOCKing or ALLOWing a device
+
                         exception = {
                             "vendor_id": vendor_hex,
                             "vendor_id_decimal": v_dec,
@@ -476,14 +473,10 @@ class DeviceControlApp:
                             "product_id_decimal": p_dec,
                             "product_name": "Unknown Device",
                             "serial_number": s_dec,
-                            "action": "BLOCK_EXECUTE",  # Change to ALLOW_EXECUTE if needed
-                            "description": f"Blocked device {combined_id}",
-                            "expiration_time": "2027-07-21T18:20:16Z",
+                            "description": f"Allowed device {combined_id}",
                             "combined_id": combined_id
                         }
 
-                        # Check if the exception already exists in the policy
-                        # We'll check the 'exceptions' list for any existing exception with the same combined_id
                         duplicate_found = False
                         for cls in class_mapping.values():
                             for existing_exception in cls.get("exceptions", []):
@@ -494,8 +487,6 @@ class DeviceControlApp:
                                 break
 
                         if not duplicate_found:
-                            # Example: we manipulate the MASS_STORAGE class -> BLOCK_ALL
-                            # Replace with ALLOW_ALL if you want to allow the device.
                             cls_id = "MASS_STORAGE"
                             desired_action = "BLOCK_ALL"
 
@@ -513,7 +504,6 @@ class DeviceControlApp:
                         else:
                             logging.info(f"Duplicate exception found for combined_id: {combined_id}. Skipping.")
 
-                        # Prepare the final payload for PATCH /policy/entities/device-control/v1
                         patch_payload = {
                             "resources": [
                                 {
@@ -525,7 +515,6 @@ class DeviceControlApp:
                             ]
                         }
 
-                        # Make direct requests.patch call to /policy/entities/device-control/v1
                         url = "https://api.eu-1.crowdstrike.com/policy/entities/device-control/v1"
                         headers = {
                             "accept": "application/json",
@@ -571,11 +560,9 @@ class DeviceControlApp:
                 f"CSV processed and policy updated.\nFailed devices saved to 'failed_devices.txt'"
             )
 
-            # Quit the app and relaunch it using subprocess
             self.root.quit()
 
-            # Relaunch the application
-            time.sleep(1)  # Adding a short delay to avoid immediate restart
+            time.sleep(1)
             subprocess.Popen([sys.executable] + sys.argv)
 
         except Exception as e:
