@@ -1,8 +1,64 @@
-Device: {'Vendor ID': 'asdfadsf', 'Model/Product ID': 'asdfasdf', 'Serial Number': 'ahaherhaea', 'Identifier': 'Mobile Devices'}
-Status Code: N/A
-Response: invalid literal for int() with base 16: 'asdfadsf'
+Device: 1256_26832_44345752514
+Status Code: 405
+Response: {
+ "meta": {
+  "query_time": 1.55e-7,
+  "powered_by": "crowdstrike-api-gateway",
+  "trace_id": "610ff6b3-7ce3-48b9-b3f8-93bad46191a2"
+ },
+ "errors": [
+  {
+   "code": 405,
+   "message": "405: Method Not Allowed"
+  }
+ ]
+}
 ==================================================
-Device: {'Vendor ID': 'asdfadsf', 'Model/Product ID': 'asdfasdf', 'Serial Number': 'ahaherhaea', 'Identifier': 'Mobile Devices'}
-Status Code: N/A
-Response: invalid literal for int() with base 16: 'asdfadsf'
+Device: 1256_26832_44345752514
+Status Code: 405
+Response: {
+ "meta": {
+  "query_time": 1.31e-7,
+  "powered_by": "crowdstrike-api-gateway",
+  "trace_id": "ef5c1e70-8257-46d8-9f8a-0a7a2dcd0535"
+ },
+ "errors": [
+  {
+   "code": 405,
+   "message": "405: Method Not Allowed"
+  }
+ ]
+}
+==================================================
+Device: 0_0_0
+Status Code: 405
+Response: {
+ "meta": {
+  "query_time": 1.48e-7,
+  "powered_by": "crowdstrike-api-gateway",
+  "trace_id": "5d27a42e-c1ef-4357-bcd1-e34f934b6a3d"
+ },
+ "errors": [
+  {
+   "code": 405,
+   "message": "405: Method Not Allowed"
+  }
+ ]
+}
+==================================================
+Device: 0_0_0
+Status Code: 405
+Response: {
+ "meta": {
+  "query_time": 1.57e-7,
+  "powered_by": "crowdstrike-api-gateway",
+  "trace_id": "20a3c559-ca20-4d36-b6f1-1a666c08fb94"
+ },
+ "errors": [
+  {
+   "code": 405,
+   "message": "405: Method Not Allowed"
+  }
+ ]
+}
 ==================================================
