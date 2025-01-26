@@ -1,11 +1,53 @@
-# Ignore all files except those explicitly specified
-*
+# Byte-compiled files
+__pycache__/
+*.py[cod]
 
-# Whitelist specific files and folders
-!.gitignore
-!*/
+# Virtual environment
+.venv/
+env/
+venv/
 
-# Ignore configuration files
+# IDE-related files
+.vscode/
+.idea/
+
+# Log files
+*.log
+*.txt
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Python-specific files
+*.egg-info/
+.eggs/
+*.egg
+
+# Environment variables and sensitive configuration
+.env
 config.json
 config.enc
 key.key
+
+# CSVs or temporary files (optional, depending on your project)
+*.csv
+*.tmp
+
+# Compiled or temporary files
+*.swp
+*.bak
+
+# Coverage and test artifacts
+htmlcov/
+.coverage
+.cache/
+pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Ignore pipenv and poetry files (if applicable)
+Pipfile
+Pipfile.lock
+poetry.lock
