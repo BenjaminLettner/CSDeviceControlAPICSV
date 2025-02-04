@@ -227,7 +227,7 @@ class DeviceControlApp:
         self.policy_dropdown = None
         self.process_button = None
 
-        # Default CSV parameters: vendor/product still decimal; now we do NOTHING with the serial number
+        # Default CSV parameters
         self.csv_params = {
             "delimiter": ",",
             "encoding": "utf-8",
@@ -236,6 +236,7 @@ class DeviceControlApp:
             "serial_number_column": "Serial Number"
         }
 
+        # Hide main window until config is set or loaded
         self.root.withdraw()
 
         if not os.path.exists(self.encryption_manager.encrypted_file):
@@ -252,7 +253,6 @@ class DeviceControlApp:
         def submit_credentials():
             client_id = client_id_var.get().strip()
             client_secret = client_secret_var.get().strip()
-
             if not client_id or not client_secret:
                 messagebox.showerror("Error", "Both Client ID and Client Secret are required.")
                 return
@@ -399,31 +399,23 @@ class DeviceControlApp:
             return
 
         threading.Thread(
-            target=self._process_csv_and_update_policy_thread,
+            target=self._process_csv_once_thread,
             args=(pol,),
             daemon=True
         ).start()
 
-    def _process_csv_and_update_policy_thread(self, selected_policy):
+    def _process_csv_once_thread(self, selected_policy):
         """
-        Direct requests.patch() call to /policy/entities/device-control/v1
-        but preserves all required fields in the policy so it doesn't get 'destroyed'.
+        Reads CSV in full, checks existing exceptions to skip duplicates,
+        marks any row with vendor/product/serial == '0' as failed,
+        then does exactly ONE patch call with valid devices.
+        Finally, writes only truly successful devices to 'successful_devices.txt'.
         """
         try:
-            self.update_status("Status: Processing CSV...")
+            self.update_status("Status: Processing CSV (single API call)...")
             self.update_summary("Summary: 0 devices processed")
 
-            success_count = 0
-            failure_count = 0
-            total_devices = 0
-            failed_devices = []
-
-            # We'll keep a reference to the entire policy "resource" so we can update it in place.
-            # selected_policy is already the dictionary returned by the GET call that includes all fields.
-            # For example, it typically has "id", "name", "description", "enabled", "platform_name", "settings", etc.
-            current_policy = dict(selected_policy)  # Make a copy (or you can modify in-place).
-
-            # Inside "settings", we get "classes" or default to an empty list
+            current_policy = dict(selected_policy)
             current_settings = current_policy.get("settings", {})
             current_classes = current_settings.get("classes", [])
             class_mapping = {cls.get("id"): cls for cls in current_classes}
@@ -434,9 +426,30 @@ class DeviceControlApp:
 
             token = self.api_client.get_access_token(config["client_id"], config["client_secret"])
             if not token:
-                raise ValueError("Failed to obtain token for patch call.")
+                raise ValueError("Failed to obtain token for the patch call.")
 
-            policy_id = current_policy.get("id")
+            # Identify or create MASS_STORAGE class
+            cls_id = "MASS_STORAGE"
+            desired_action = "BLOCK_ALL"
+
+            if cls_id not in class_mapping:
+                class_mapping[cls_id] = {
+                    "id": cls_id,
+                    "action": desired_action,
+                    "exceptions": []
+                }
+                current_classes.append(class_mapping[cls_id])
+
+            existing_exceptions = class_mapping[cls_id].get("exceptions", [])
+
+            # Counters and containers
+            total_rows = 0
+            duplicate_count = 0
+            new_count = 0
+            failed_count = 0
+            failed_devices_list = []
+            duplicates_list = []
+            new_exceptions = []
 
             with open(self.CSV_FILEPATH, "r", encoding=self.csv_params["encoding"]) as cf:
                 csv_reader = csv.DictReader(cf, delimiter=self.csv_params["delimiter"])
@@ -445,147 +458,150 @@ class DeviceControlApp:
                 prod_col = self.csv_params["model_product_id_column"]
                 sn_col = self.csv_params["serial_number_column"]
 
-                required_columns = {vend_col, prod_col, sn_col, "Identifier"}
+                required_columns = {vend_col, prod_col, sn_col, "Identifier", "TicketNR"}
                 if not required_columns.issubset(csv_reader.fieldnames):
                     missing = required_columns - set(csv_reader.fieldnames)
                     raise ValueError(f"CSV missing cols: {missing}")
 
                 rows = list(csv_reader)
-                total_devices = len(rows)
-                self.update_summary(f"{total_devices} devices to process")
+                total_rows = len(rows)
+                self.update_summary(f"{total_rows} devices read from CSV")
 
                 for idx, row in enumerate(rows, start=1):
-                    try:
-                        # Convert vendor & product to decimal (fallback "0" if invalid).
-                        vendor_dec = self.parse_decimal(row.get(vend_col, "").strip())
-                        product_dec = self.parse_decimal(row.get(prod_col, "").strip())
+                    vendor_dec = self.parse_decimal(row.get(vend_col, "").strip())
+                    product_dec = self.parse_decimal(row.get(prod_col, "").strip())
+                    serial_val = self.parse_decimal(row.get(sn_col, "").strip())
+                    identifier = row.get("Identifier", "").strip()
+                    ticket_val = row.get("TicketNR", "").strip()
 
-                        # For the serial number, do NOT parse or convert; just take it as is.
-                        serial_val = row.get(sn_col, "").strip()
-
-                        identifier = row.get("Identifier", "").strip()
-
-                        if not all([vendor_dec, product_dec, serial_val, identifier]):
-                            raise ValueError("Missing fields in CSV row")
-
-                        combined_id = f"{vendor_dec}_{product_dec}_{serial_val}"
-
-                        # Prepare the new exception object
-                        exception = {
+                    # Fail if any field is 0 or if required fields are missing
+                    if not all([vendor_dec, product_dec, serial_val, identifier]):
+                        failed_count += 1
+                        failed_devices_list.append({
+                            "row": idx,
                             "vendor_id": vendor_dec,
-                            "vendor_id_decimal": vendor_dec,
-                            "vendor_name": identifier,
                             "product_id": product_dec,
-                            "product_id_decimal": product_dec,
-                            "serial_number": serial_val,  # unchanged
-                            "action": "FULL_ACCESS",
-                            "description": f"Allowed device {combined_id}",
-                            "combined_id": combined_id
-                        }
+                            "serial": serial_val,
+                            "reason": "Missing or invalid fields"
+                        })
+                        continue
+                    if vendor_dec == "0" or product_dec == "0" or serial_val == "0":
+                        failed_count += 1
+                        failed_devices_list.append({
+                            "row": idx,
+                            "vendor_id": vendor_dec,
+                            "product_id": product_dec,
+                            "serial": serial_val,
+                            "reason": "One or more fields parse to 0 => invalid"
+                        })
+                        continue
 
-                        # Check if this combined_id already exists in any class
-                        duplicate_found = False
-                        for cls in class_mapping.values():
-                            for existing_exception in cls.get("exceptions", []):
-                                if existing_exception.get("combined_id") == combined_id:
-                                    duplicate_found = True
-                                    break
-                            if duplicate_found:
+                    combined_id = f"{vendor_dec}_{product_dec}_{serial_val}"
+                    description_val = f"Allowed device {combined_id}"
+                    if ticket_val:
+                        description_val += f" (Ticket: {ticket_val})"
+
+                    # Check duplicates in existing policy
+                    is_duplicate = False
+                    for ex in existing_exceptions:
+                        if ex.get("combined_id") == combined_id:
+                            is_duplicate = True
+                            duplicates_list.append(combined_id)
+                            break
+
+                    # Also check duplicates in new_exceptions
+                    if not is_duplicate:
+                        for ex2 in new_exceptions:
+                            if ex2.get("combined_id") == combined_id:
+                                is_duplicate = True
+                                duplicates_list.append(combined_id)
                                 break
 
-                        # If no duplicate, add it to the MASS_STORAGE class
-                        if not duplicate_found:
-                            cls_id = "MASS_STORAGE"
-                            desired_action = "BLOCK_ALL"
+                    if is_duplicate:
+                        duplicate_count += 1
+                        continue
 
-                            if cls_id in class_mapping:
-                                class_mapping[cls_id]["action"] = desired_action
-                                class_mapping[cls_id]["exceptions"].append(exception)
-                            else:
-                                new_class = {
-                                    "id": cls_id,
-                                    "action": desired_action,
-                                    "exceptions": [exception]
-                                }
-                                class_mapping[cls_id] = new_class
-                                current_classes.append(new_class)
-                        else:
-                            logging.info(f"Duplicate exception found for combined_id: {combined_id}. Skipping.")
+                    # If we reach here, it's valid and not a duplicate
+                    new_count += 1
+                    new_exceptions.append({
+                        "vendor_id_decimal": vendor_dec,
+                        "vendor_name": identifier,
+                        "product_id_decimal": product_dec,
+                        "serial_number": serial_val,
+                        "action": "FULL_ACCESS",
+                        "description": description_val,
+                        "combined_id": combined_id
+                    })
 
-                        # After each device, build the patch payload by reusing the original policy fields
-                        # but updating the "classes" array in "settings".
-                        current_settings["classes"] = list(class_mapping.values())
-                        current_policy["settings"] = current_settings
-
-                        # NOTE: The CrowdStrike API often wants other fields besides "id" and "settings".
-                        # Many fields come from the GET. If needed, copy them all into current_policy.
-                        # For example:
-                        # current_policy["id"]           = policy_id
-                        # current_policy["name"]         = selected_policy.get("name", "")
-                        # current_policy["description"]  = selected_policy.get("description", "")
-                        # current_policy["platform_name"] = selected_policy.get("platform_name", "")
-                        # etc.
-
-                        patch_payload = {
-                            "resources": [
-                                current_policy  # your entire updated policy dict
-                            ]
-                        }
-
-                        url = "https://api.eu-1.crowdstrike.com/policy/entities/device-control/v1"
-                        headers = {
-                            "accept": "application/json",
-                            "authorization": f"Bearer {token}",
-                            "Content-Type": "application/json"
-                        }
-
-                        resp = requests.patch(url, headers=headers, json=patch_payload)
-
-                        if resp.status_code in [200, 201, 204]:
-                            success_count += 1
-                        else:
-                            failure_count += 1
-                            failed_devices.append({
-                                "device": combined_id,
-                                "status_code": resp.status_code,
-                                "response": resp.text
-                            })
-
-                    except Exception as exc:
-                        failure_count += 1
-                        failed_devices.append({
-                            "device": row,
-                            "status_code": "N/A",
-                            "response": str(exc)
-                        })
-                    finally:
-                        self.update_summary(f"{idx} of {total_devices} devices processed")
-
-            # If we have failures, write them out
-            if failed_devices:
+            # Write out failed devices
+            if failed_devices_list:
                 with open("failed_devices.txt", "w", encoding="utf-8") as ff:
-                    for failed in failed_devices:
-                        ff.write(f"Device: {failed['device']}\n")
-                        ff.write(f"Status Code: {failed['status_code']}\n")
-                        ff.write(f"Response: {failed['response']}\n")
+                    for fdev in failed_devices_list:
+                        ff.write(f"Row: {fdev['row']}\n")
+                        ff.write(f"Vendor: {fdev['vendor_id']}\n")
+                        ff.write(f"Product: {fdev['product_id']}\n")
+                        ff.write(f"Serial: {fdev['serial']}\n")
+                        ff.write(f"Reason: {fdev['reason']}\n")
                         ff.write("=" * 50 + "\n")
-                logging.warning(f"{len(failed_devices)} devices failed to update.")
+                logging.warning(f"{len(failed_devices_list)} rows were marked as failed (wrote to failed_devices.txt)")
 
-            self.update_status(f"Status: {success_count} succeeded, {failure_count} failed")
-            self.update_summary(f"Summary: {total_devices} devices processed")
-            messagebox.showinfo(
-                "Success",
-                f"CSV processed and policy updated.\nFailed devices saved to 'failed_devices.txt'"
-            )
+            # Append new_exceptions to existing
+            existing_exceptions.extend(new_exceptions)
+            class_mapping[cls_id]["action"] = desired_action
+            class_mapping[cls_id]["exceptions"] = existing_exceptions
+            current_settings["classes"] = list(class_mapping.values())
+            current_policy["settings"] = current_settings
 
-            # Optionally restart the application
+            # Single patch call
+            patch_payload = {
+                "resources": [current_policy]
+            }
+            url = "https://api.eu-1.crowdstrike.com/policy/entities/device-control/v1"
+            headers = {
+                "accept": "application/json",
+                "authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.patch(url, headers=headers, json=patch_payload)
+
+            if response.status_code in [200, 201, 204]:
+                # If single patch call succeeds, write new_exceptions to successful_devices.txt
+                if new_exceptions:
+                    with open("successful_devices.txt", "w", encoding="utf-8") as sf:
+                        for ex in new_exceptions:
+                            sf.write(ex["combined_id"] + "\n")
+
+                self.update_status(
+                    f"Status: Patch success. {new_count} added, {duplicate_count} duplicates, {failed_count} failed."
+                )
+                self.update_summary(f"Summary: {total_rows} rows processed")
+
+                messagebox.showinfo(
+                    "Success",
+                    f"Processed {total_rows} rows.\n"
+                    f"Newly added exceptions: {new_count}\n"
+                    f"Duplicates skipped: {duplicate_count}\n"
+                    f"Failures (with 0 or missing fields): {failed_count}\n\n"
+                    f"Policy updated with a single API call.\n"
+                    f"Check 'failed_devices.txt' (and 'successful_devices.txt') for details."
+                )
+            else:
+                err_msg = (
+                    f"Single patch call failed with status {response.status_code}\n"
+                    f"Response: {response.text}"
+                )
+                logging.error(err_msg)
+                self.update_status("Status: Single patch call failed")
+                messagebox.showerror("Error", err_msg)
+
             self.root.quit()
             time.sleep(1)
             subprocess.Popen([sys.executable] + sys.argv)
 
         except Exception as e:
-            logging.error(f"Error during CSV processing: {e}")
-            self.update_status("Status: Error during processing")
+            logging.error(f"Error during single-call CSV processing: {e}")
+            self.update_status("Status: Error during single-call processing")
             self.update_summary("Summary: 0 devices processed")
             messagebox.showerror("Error", f"An error occurred: {e}")
 

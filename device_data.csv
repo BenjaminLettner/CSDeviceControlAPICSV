@@ -1,2 +1,7 @@
-Vendor ID,Model/Product ID,Serial Number,Identifier
-123,1234,1234ABCDE,MobileDevices
+Vendor ID,Model/Product ID,Serial Number,Identifier,TicketNR
+12736,4660,221114141121009146,1234Test,TestTicket
+12737,4660,221114141121009146,1234Test,TestTicket
+12738,4660,221114141121009146,1234Test,TestTicket
+abcdefg,4660,221114141121009146,1234Test,TestTicket
+12738,abcedfg,221114141121009146,1234Test,TestTicket
+12738,4660,abcdefg,1234Test,TestTicket

@@ -1,16 +1,18 @@
-Device: 2236_26832_44345752514
-Status Code: 404
-Response: {
- "meta": {
-  "query_time": 0.010710918,
-  "trace_id": "94fb2bd9-4ee1-4643-a609-16b6c4739260"
- },
- "errors": [
-  {
-   "code": 404,
-   "message": "Could not find resource with id 3cd8912722fc4fa89157e30e82b3555a"
-  }
- ],
- "resources": null
-}
+Row: 4
+Vendor: 0
+Product: 4660
+Serial: 221114141121009146
+Reason: One or more fields parse to 0 => invalid
+==================================================
+Row: 5
+Vendor: 12738
+Product: 0
+Serial: 221114141121009146
+Reason: One or more fields parse to 0 => invalid
+==================================================
+Row: 6
+Vendor: 12738
+Product: 4660
+Serial: 0
+Reason: One or more fields parse to 0 => invalid
 ==================================================
